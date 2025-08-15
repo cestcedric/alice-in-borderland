@@ -16,13 +16,17 @@ def handle_chapter(url: str) -> str | None:
     title, filename = get_chapter_name(url)
     print(title)
 
-    # All pages as separate images
+    # Still load page even if we could check for existence: we want the link to the next chapter
     chapter = requests.get(url)
     soup = BeautifulSoup(chapter.content, "html.parser")
     content = soup.find("div", class_="entry-content").find("p")
 
-    pages = get_pages(content)
-    create_pdf(pages, title, filename)
+    output_path = os.path.join(OUTPUT_PATH, filename)
+    if os.path.isfile(output_path):
+        print(f"Already exists!")
+    else:
+        pages = get_pages(content)
+        create_pdf(pages, output_path)
 
     return get_next_chapter_url(soup)
 
@@ -73,12 +77,8 @@ def get_next_chapter_url(soup: BeautifulSoup) -> str | None:
     return nav_next.find("a")["href"]
 
 
-def create_pdf(pages: list, title: str, filename: str) -> None:
-    output_path = os.path.join(OUTPUT_PATH, filename)
-    if os.path.isfile(output_path):
-        print(f"{title} already exists!")
-    else:
-        pages[0].save(output_path, save_all=True, append_images=pages[1:])
+def create_pdf(pages: list, output_path: str) -> None:
+    pages[0].save(output_path, save_all=True, append_images=pages[1:])
 
 
 if __name__ == "__main__":
