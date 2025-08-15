@@ -3,11 +3,13 @@ import requests
 from bs4 import BeautifulSoup
 from io import BytesIO
 from PIL import Image
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 START_URL = "https://alice-in-borderland.com/manga/alice-in-borderland-chapter-1/"
 OUTPUT_PATH = os.path.join(os.getcwd(), "pdf")
 COMPRESSION = 100
+CONCURRENCY = 8
 
 
 def handle_chapter(url: str) -> str | None:
@@ -33,10 +35,11 @@ def get_chapter_name(url: str) -> tuple[str]:
 
 
 def get_pages(soup: BeautifulSoup) -> list:
-    pages = []
     page_links = [img["src"] for img in soup.find_all("img")]
+    pages = [None] * len(page_links)
 
-    for i, url in enumerate(page_links):
+    def download(params: tuple[str, int]) -> None:
+        url, idx = params
         response = requests.get(url)
         img = Image.open(BytesIO(response.content))
         if img.mode != "RGB":
@@ -48,8 +51,15 @@ def get_pages(soup: BeautifulSoup) -> list:
             buffer.seek(0)
             img = Image.open(buffer)
 
-        pages.append(img)
-        print(f"Page {i + 1} / {len(page_links)}")
+        pages[idx] = img
+        return f"Page {idx + 1} / {len(page_links)}"
+
+    with ThreadPoolExecutor(max_workers=CONCURRENCY) as executor:
+        futures = [
+            executor.submit(download, (url, idx)) for idx, url in enumerate(page_links)
+        ]
+    for future in as_completed(futures):
+        print(future.result())
 
     return pages
 
